@@ -25,7 +25,7 @@ function Player.new(x, y)
     self.sprite = nil
     self.quads = nil
     self.animationTimer = 0
-    self.currentFrame = 1
+    self.currentFrame = 2  -- Standing frame is middle column
     self.isAnimating = false
     
     -- Grid movement system
@@ -58,6 +58,7 @@ function Player:loadSprites()
     self.sprite = nil
     if love.filesystem.getInfo(spritePath) then
         self.sprite = love.graphics.newImage(spritePath)
+        self.sprite:setFilter("nearest", "nearest")
         
         -- Sprite sheet dimensions (16x20 frames)
         self.spriteWidth = 48   -- 3 frames * 16px
@@ -147,7 +148,7 @@ function Player:update(dt, walls)
                 
                 -- Update animation
                 self.isAnimating = true
-                self.currentFrame = 2  -- Walking frame
+                self.currentFrame = 1  -- Start with left step
             end
         end
     else
@@ -161,7 +162,7 @@ function Player:update(dt, walls)
             self.isMoving = false
             self.moveProgress = 0
             self.isAnimating = false
-            self.currentFrame = 1  -- Standing frame
+            self.currentFrame = 2  -- Standing frame (middle column)
         else
             -- Interpolate position during movement
             self.x = self.startX + (self.targetX - self.startX) * self.moveProgress
@@ -171,8 +172,8 @@ function Player:update(dt, walls)
             self.animationTimer = self.animationTimer + dt
             if self.animationTimer >= self.animationSpeed then
                 self.animationTimer = 0
-                -- Toggle between walking frames
-                self.currentFrame = self.currentFrame == 2 and 3 or 2
+                -- Toggle between walking frames: 1 (left step) and 3 (right step)
+                self.currentFrame = (self.currentFrame == 1) and 3 or 1
             end
         end
     end
@@ -239,8 +240,8 @@ function Player:draw()
         if not quad then return end
         
         -- Calculate draw position (anchor at feet: bottom of sprite aligns with bottom of collision box)
-        local drawX = self.x - self.frameWidth / 2
-        local drawY = (self.y + self.height / 2) - self.frameHeight
+        local drawX = math.floor(self.x - self.frameWidth / 2 + 0.5)
+        local drawY = math.floor((self.y + self.height / 2) - self.frameHeight + 0.5)
         
         -- Draw the sprite
         love.graphics.setColor(1, 1, 1)
