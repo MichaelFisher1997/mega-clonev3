@@ -15,8 +15,9 @@ function Player.new(x, y)
     local self = setmetatable({}, Player)
     
     -- Initialize player state
-    self.x = x
-    self.y = y
+    -- Treat x, y as top-left of tile; store player position as CENTER of the tile/hitbox
+    self.x = x + TILE_SIZE / 2
+    self.y = y + TILE_SIZE / 2
     self.width = 16  -- Collision width for tile grid
     self.height = 16  -- Collision height for tile grid
     self.direction = "down"
@@ -28,16 +29,16 @@ function Player.new(x, y)
     self.isAnimating = false
     
     -- Grid movement system
-    self.targetX = x
-    self.targetY = y
+    self.targetX = self.x
+    self.targetY = self.y
     self.isMoving = false
-    self.tileX = math.floor(x / TILE_SIZE)
-    self.tileY = math.floor(y / TILE_SIZE)
+    self.tileX = math.floor(self.x / TILE_SIZE)
+    self.tileY = math.floor(self.y / TILE_SIZE)
     self.moveSpeed = 8  -- pixels per frame for smooth movement
     self.moveProgress = 0
     self.totalMoveTime = 16 / self.moveSpeed  -- time to move one tile
-    self.startX = x
-    self.startY = y
+    self.startX = self.x
+    self.startY = self.y
     
     -- Load player sprites
     self:loadSprites()
@@ -128,8 +129,9 @@ function Player:update(dt, walls)
         
         -- Check if we can move to the new tile position
         if newTileX ~= self.tileX or newTileY ~= self.tileY then
-            local targetX = newTileX * TILE_SIZE
-            local targetY = newTileY * TILE_SIZE
+            -- Move to the CENTER of the target tile
+            local targetX = newTileX * TILE_SIZE + TILE_SIZE / 2
+            local targetY = newTileY * TILE_SIZE + TILE_SIZE / 2
             
             if self:canMoveTo(targetX, targetY, walls) then
                 -- Start movement to new tile
@@ -236,9 +238,9 @@ function Player:draw()
         local quad = self.quads[row][self.currentFrame]
         if not quad then return end
         
-        -- Calculate draw position (center sprite)
-        local drawX = self.x - self.width/2
-        local drawY = self.y - self.height/2
+        -- Calculate draw position (anchor at feet: bottom of sprite aligns with bottom of collision box)
+        local drawX = self.x - self.frameWidth / 2
+        local drawY = (self.y + self.height / 2) - self.frameHeight
         
         -- Draw the sprite
         love.graphics.setColor(1, 1, 1)
