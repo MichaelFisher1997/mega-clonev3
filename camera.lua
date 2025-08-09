@@ -1,8 +1,9 @@
--- Camera class for Love2D game
 -- Handles camera movement and following the player
 
 local Camera = {}
 Camera.__index = Camera
+
+local Screen = require("screen")
 
 function Camera.new()
     local self = setmetatable({}, Camera)
@@ -22,33 +23,28 @@ function Camera.new()
     self.followSpeed = 5
     self.deadZone = 50  -- Distance from center before camera moves
     
-    -- Screen dimensions
-    self.screenWidth = love.graphics.getWidth()
-    self.screenHeight = love.graphics.getHeight()
+    -- Screen dimensions (virtual via Screen)
+    self.screenWidth = 0
+    self.screenHeight = 0
     
     return self
 end
 
 function Camera:update(player)
-    -- Calculate target camera position to center player
-    local windowWidth, windowHeight = love.graphics.getDimensions()
-    
-    -- Calculate scale to maintain aspect ratio
-    local scaleX = windowWidth / self.baseWidth
-    local scaleY = windowHeight / self.baseHeight
-    local scale = math.min(scaleX, scaleY)
-    
-    -- Calculate camera position to center player
-    local targetX = player.x - (windowWidth / scale) / 2
-    local targetY = player.y - (windowHeight / scale) / 2
-    
+    -- Calculate target camera position to center player in virtual space
+    local vw, vh = Screen.getVirtualSize()
+    self.screenWidth, self.screenHeight = vw, vh
+    local targetX = player.x - (vw / 2)
+    local targetY = player.y - (vh / 2)
     self.x = targetX
     self.y = targetY
-    self.scale = scale
+    -- Scaling is handled by Screen; keep camera scale at 1 unless implementing zoom
+    self.scale = 1
 end
 
 function Camera:apply()
     love.graphics.push()
+    -- No additional camera scaling; Screen handles window scaling
     love.graphics.scale(self.scale, self.scale)
     love.graphics.translate(-math.floor(self.x), -math.floor(self.y))
 end

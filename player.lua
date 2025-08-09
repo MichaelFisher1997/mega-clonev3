@@ -11,7 +11,7 @@ local PLAYER_HEIGHT = 20
 local TILE_SIZE = 16
 local MOVE_SPEED = 8  -- pixels per frame for smooth tile-to-tile movement
 
-function Player.new(x, y)
+function Player.new(x, y, opts)
     local self = setmetatable({}, Player)
     
     -- Initialize player state
@@ -23,6 +23,8 @@ function Player.new(x, y)
     self.direction = "down"
     self.isMoving = false
     self.sprite = nil
+    self.spritePath = opts and opts.spritePath or nil
+    self.character = opts and opts.character or nil
     self.quads = nil
     self.animationTimer = 0
     self.currentFrame = 2  -- Standing frame is middle column
@@ -51,8 +53,17 @@ function Player.new(x, y)
 end
 
 function Player:loadSprites()
-    -- Load the 16x16 player sprite sheet
-    local spritePath = "images/player/character_1/character_1_frame16x20.png"
+    -- Resolve sprite path
+    local spritePath = self.spritePath
+    if not spritePath and self.character then
+        local ok, Content = pcall(require, "content")
+        if ok and Content and Content.findCharacterSprite then
+            spritePath = Content.findCharacterSprite(self.character)
+        end
+    end
+    if not spritePath then
+        spritePath = "images/player/character_1/character_1_frame16x20.png"
+    end
     
     -- Load the sprite sheet
     self.sprite = nil

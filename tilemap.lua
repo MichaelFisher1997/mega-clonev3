@@ -7,11 +7,17 @@
 local Tilemap = {}
 Tilemap.__index = Tilemap
 
-function Tilemap.new(mapData)
+function Tilemap.new(mapModule)
     local self = setmetatable({}, Tilemap)
     
     -- Load the handmade tilemap data
-    self.mapData = require("maps.Level1.Map1")
+    local modulePath = mapModule or "maps.Level1.Map1"
+    -- Support paths with slashes
+    if modulePath:find("/") then
+        modulePath = modulePath:gsub("/", ".")
+    end
+    self.mapData = require(modulePath)
+    self.mapModule = modulePath
     self.tileSize = 16
     self.walls = {}
     self.tilesets = {}
@@ -80,12 +86,7 @@ function Tilemap:parseCollisionData()
     end
     
     -- Debug: print found walls
-    if #self.walls > 0 then
-        print("Found " .. #self.walls .. " collision walls")
-        for i, wall in ipairs(self.walls) do
-            print("Wall " .. i .. ": x=" .. wall.x .. ", y=" .. wall.y .. ", w=" .. wall.width .. ", h=" .. wall.height)
-        end
-    end
+    -- (logs suppressed)
 end
 
 function Tilemap:getTileAt(x, y, layerName)
@@ -153,6 +154,60 @@ function Tilemap:getTilesetForTile(tileId)
     return nil
 end
 
+-- Helper: check if a layer has an 'overhead' boolean property set to true.
+function Tilemap:hasOverheadProperty(layer)
+    local props = layer and layer.properties
+    if not props then return false end
+    -- Case 1: dictionary-style (props.overhead == true)
+    if type(props) == "table" and props.overhead == true then
+        return true
+    end
+    -- Case 2: array-style list of property tables from Tiled
+    if type(props) == "table" then
+        for _, p in ipairs(props) do
+            if type(p) == "table" then
+                local name = (p.name or ""):lower()
+                local val = p.value
+                if (name == "overhead" or name == "overlay") and (val == true or val == "true") then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function Tilemap:isOverheadLayer(layer)
+    if layer and layer.type == "tilelayer" then
+        if self:hasOverheadProperty(layer) then
+            return true
+        end
+        local name = (layer.name or ""):lower()
+        if name == "overhead" or name == "overlay" or name == "top" or name == "above" then
+            return true
+        end
+    end
+    return false
+end
+
+function Tilemap:drawBaseLayers()
+    if not self.mapData then return end
+    for _, layer in ipairs(self.mapData.layers) do
+        if layer.type == "tilelayer" and layer.visible and not self:isOverheadLayer(layer) then
+            self:drawTileLayer(layer)
+        end
+    end
+end
+
+function Tilemap:drawOverheadLayers()
+    if not self.mapData then return end
+    for _, layer in ipairs(self.mapData.layers) do
+        if layer.type == "tilelayer" and layer.visible and self:isOverheadLayer(layer) then
+            self:drawTileLayer(layer)
+        end
+    end
+end
+
 function Tilemap:drawColoredTile(tileId, x, y)
     love.graphics.setColor(1, 0, 0)
     love.graphics.rectangle("fill", x, y, self.tileSize, self.tileSize)
@@ -160,23 +215,17 @@ function Tilemap:drawColoredTile(tileId, x, y)
 end
 
 function Tilemap:draw(camera)
-    -- Draw the actual handmade tilemap
+    -- Default draw: base layers only. Use drawOverheadLayers() after drawing entities.
     if not self.mapData then return end
-    
-    -- Draw tiles
-    local layers = self.mapData.layers
-    for _, layer in ipairs(layers) do
-        if layer.type == "tilelayer" and layer.visible then
-            self:drawTileLayer(layer)
-        end
-    end
-    
-    -- Draw collision boxes in white for debugging
-    love.graphics.setColor(1, 1, 1, 0.7)  -- White with slight transparency
+    self:drawBaseLayers()
+end
+
+function Tilemap:drawDebugWalls()
+    love.graphics.setColor(1, 1, 1, 0.7)
     for _, wall in ipairs(self.walls) do
         love.graphics.rectangle("line", wall.x, wall.y, wall.width, wall.height)
     end
-    love.graphics.setColor(1, 1, 1, 1)  -- Reset to white
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Tilemap:getWalls()
