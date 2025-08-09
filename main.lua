@@ -9,6 +9,9 @@ local Screen = require("screen")
 local Menu = require("menu")
 local Content = require("content")
 
+-- Debug build toggle: set to false before releasing
+local DEBUG_BUILD = true
+
 -- Game state
 local game = {
     map = nil,
@@ -193,7 +196,7 @@ function love.draw()
         drawBombs()
         game.player:draw()
         if game.tilemap then game.tilemap:drawOverheadLayers() end
-        if game.debug then drawDebug() end
+        if DEBUG_BUILD and game.debug then drawDebug() end
         game.camera:reset()
         drawUI()
     end
@@ -237,14 +240,29 @@ function drawUI()
     love.graphics.print("Controls:", 10, 10)
     love.graphics.print("WASD/Arrows: Move", 10, 30)
     love.graphics.print("Space/Z: Place Bomb", 10, 50)
-    love.graphics.print("F1: Toggle Debug", 10, 70)
+    if DEBUG_BUILD then love.graphics.print("F1: Toggle Debug", 10, 70) end
     love.graphics.print("F: Toggle Fullscreen", 10, 90)
     love.graphics.print("Esc: Menu", 10, 110)
     
-    if game.debug then
-        love.graphics.print("Debug Mode: ON", 10, 110)
+    -- Debug overlay
+    if DEBUG_BUILD and game.debug then
+        -- Status
+        love.graphics.print("Debug Mode: ON", 10, 130)
         local wallCount = game.tilemap and #game.tilemap:getWalls() or 0
-        love.graphics.print("Walls: " .. wallCount, 10, 130)
+        love.graphics.print("Walls: " .. wallCount, 10, 150)
+        -- Player coordinates (top-right)
+        if game.player then
+            local T = game.tileSize or 16
+            local px = math.floor(game.player.x + 0.5)
+            local py = math.floor(game.player.y + 0.5)
+            local tx = math.floor(game.player.x / T)
+            local ty = math.floor(game.player.y / T)
+            local text = string.format("X:%d  Y:%d  |  Tile:%d,%d", px, py, tx, ty)
+            local font = love.graphics.getFont()
+            local w = font and font:getWidth(text) or (#text * 6)
+            local x = (game.baseWidth or 192) - w - 8
+            love.graphics.print(text, x, 4)
+        end
     end
 end
 
@@ -262,7 +280,7 @@ function love.keypressed(key)
         Screen.toggleFullscreen()
         return
     end
-    if key == "f1" then
+    if DEBUG_BUILD and key == "f1" then
         game.debug = not game.debug
         return
     end
