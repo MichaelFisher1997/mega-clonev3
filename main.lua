@@ -2,6 +2,7 @@
 -- Author: Cascade AI
 
 local Player = require("player")
+local Bomb = require("bomb")
 local Camera = require("camera")
 local Tilemap = require("tilemap")
 local Screen = require("screen")
@@ -19,7 +20,8 @@ local game = {
     mapWidth = 100,
     mapHeight = 100,
     state = "menu", -- menu | playing | options
-    menu = nil
+    menu = nil,
+    bombs = {}
     , selectedCharacter = nil
     , selectedLevel = nil
 }
@@ -57,6 +59,7 @@ function love.load()
     
     -- Player and tilemap will be created when starting the game
     game.player = nil
+    game.bombs = {}
     
     -- Create camera
     game.camera = Camera.new()
@@ -81,6 +84,8 @@ function love.load()
             
             -- Create player with selected character
             game.player = Player.new(playerStartX, playerStartY, { character = game.selectedCharacter })
+            -- Track bombs the player can pass through (only while still overlapping)
+            game.player.allowedBombs = {}
             
             -- Ensure camera exists and focuses player
             if not game.camera then
@@ -115,7 +120,58 @@ function love.update(dt)
     end
     
     -- Playing state updates
-    game.player:update(dt, game.tilemap:getWalls())
+    -- Update bombs
+    for i = #game.bombs, 1, -1 do
+        local b = game.bombs[i]
+        b:update(dt)
+        if b:isDone() then table.remove(game.bombs, i) end
+    end
+
+    -- Build dynamic collision: tile walls + solid bombs
+    local combinedWalls = {}
+    if game.tilemap then
+        for _, w in ipairs(game.tilemap:getWalls()) do
+            combinedWalls[#combinedWalls+1] = w
+        end
+    end
+
+    -- Ensure set exists
+    if game.player and not game.player.allowedBombs then game.player.allowedBombs = {} end
+
+    -- Helper: check if player currently overlaps the bomb tile
+    local function playerOverlapsBomb(b)
+        local T = b.tileSize or game.tileSize
+        local bx = b.x - T/2
+        local by = b.y - T/2
+        return game.player:rectanglesIntersect(
+            game.player.x - game.player.width/2,
+            game.player.y - game.player.height/2,
+            game.player.width,
+            game.player.height,
+            bx, by, T, T
+        )
+    end
+
+    -- Prune pass-through once the player steps off the bomb
+    if game.player then
+        for b, _ in pairs(game.player.allowedBombs) do
+            if b:isDone() or b:isExploding() or not playerOverlapsBomb(b) then
+                game.player.allowedBombs[b] = nil
+            end
+        end
+    end
+
+    -- Add bombs as solid walls unless still allowed to pass through
+    for _, b in ipairs(game.bombs) do
+        if not b:isDone() and not b:isExploding() then
+            if not (game.player and game.player.allowedBombs[b]) then
+                local T = b.tileSize or game.tileSize
+                combinedWalls[#combinedWalls+1] = { x = b.x - T/2, y = b.y - T/2, width = T, height = T }
+            end
+        end
+    end
+
+    game.player:update(dt, combinedWalls)
     game.camera:update(game.player)
 end
 
@@ -134,6 +190,7 @@ function love.draw()
         -- Apply camera for world rendering
         game.camera:apply()
         drawMap()
+        drawBombs()
         game.player:draw()
         if game.tilemap then game.tilemap:drawOverheadLayers() end
         if game.debug then drawDebug() end
@@ -147,6 +204,12 @@ function drawMap()
     -- Draw the actual handmade tilemap
     if game.tilemap then
         game.tilemap:draw()
+    end
+end
+
+function drawBombs()
+    for _, b in ipairs(game.bombs) do
+        b:draw()
     end
 end
 
@@ -173,9 +236,10 @@ function drawUI()
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("Controls:", 10, 10)
     love.graphics.print("WASD/Arrows: Move", 10, 30)
-    love.graphics.print("F1: Toggle Debug", 10, 50)
-    love.graphics.print("F: Toggle Fullscreen", 10, 70)
-    love.graphics.print("Esc: Menu", 10, 90)
+    love.graphics.print("Space/Z: Place Bomb", 10, 50)
+    love.graphics.print("F1: Toggle Debug", 10, 70)
+    love.graphics.print("F: Toggle Fullscreen", 10, 90)
+    love.graphics.print("Esc: Menu", 10, 110)
     
     if game.debug then
         love.graphics.print("Debug Mode: ON", 10, 110)
@@ -200,6 +264,27 @@ function love.keypressed(key)
     end
     if key == "f1" then
         game.debug = not game.debug
+        return
+    end
+    if key == "space" or key == "z" then
+        -- Only one active bomb at a time
+        local hasActive = false
+        for _, b in ipairs(game.bombs) do if not b:isDone() then hasActive = true break end end
+        if not hasActive and game.player and game.tilemap then
+            local T = game.tileSize
+            -- Player is centered on tiles; get tile index and convert back to tile center
+            local tx = math.floor(game.player.x / T)
+            local ty = math.floor(game.player.y / T)
+            local wx, wy = tx * T + T/2, ty * T + T/2
+            local bomb = Bomb.new(wx, wy, {
+                tileSize = T,
+                range = 2,
+                getWalls = function() return game.tilemap:getWalls() end
+            })
+            table.insert(game.bombs, bomb)
+            -- Allow player to pass through this bomb only until they step off it
+            game.player.allowedBombs[bomb] = true
+        end
         return
     end
 end
